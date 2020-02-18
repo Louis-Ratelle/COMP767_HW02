@@ -133,6 +133,37 @@ def random_argmax(vector):
 
     return index
 
+
+# #############################################################################
+#
+# This will create the tile coding
+#
+# #############################################################################
+
+
+class tiling10():
+    def __init__(self, seed = 1):
+        np.random.seed(seed)
+        self.shift_10_tilings = self.create_tilings()
+
+    def create_tilings(self):
+        return np.random.uniform(low=0.0, high=.1,size=10)
+
+    def build_features(self, num):
+        a = np.zeros(11*10)
+        for pos in range(10):
+            ind = int(np.ceil((num - self.shift_10_tilings[pos])/0.1))
+            a[ind + pos * 11] = 1
+        return a
+
+
+
+
+
+
+
+
+
 # #############################################################################
 #
 # Main
@@ -144,6 +175,11 @@ def main():
 
     # parses command line arguments
     args = get_arguments()
+
+    tilings= tiling10(2)
+    #print(tilings.shift_10_tilings)
+    #print(tilings.build_features(0.32))
+    #print(tilings.build_features(0.33))
 
 
 if __name__ == '__main__':
