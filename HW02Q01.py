@@ -19,7 +19,7 @@ NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = None
 # SEED = 197710
 
-NB_EPISODES = 100 # 25
+NB_EPISODES = 25 # 25
 NB_RUNS = 50 # 50
 
 #set_LFPR = set()
@@ -220,6 +220,7 @@ class td_lambda_agent():
         tot = 0
         for num in l_nums:
             v = np.sum(self.average_w * self.tiling.build_features(num))
+            print("v={} for num={}".format(v, num))
             tot += (v - num)**2
         avg_msve = tot / len(l_nums)
         return avg_msve
@@ -251,7 +252,8 @@ def main():
     """
 
     agents = {}
-    for (alpha, lammbda) in [(0.1, 0.4)]: #[(0.03* i, 0.2) for i in range(0,10)]:
+    for (alpha, lammbda) in [(0.08, 0.4)]: #[(0.03* i, 0.2) for i in range(0,10)]:
+        print("for alpha = {} and lammbda = {}".format(alpha, lammbda))
         #alpha = 0.1
         #lammbda = 0.5
         #seeds = list(range(NB_RUNS))
