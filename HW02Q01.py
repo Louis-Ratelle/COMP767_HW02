@@ -19,6 +19,11 @@ NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = None
 # SEED = 197710
 
+NB_EPISODES = 100 # 25
+NB_RUNS = 50 # 50
+
+#set_LFPR = set()
+
 # #############################################################################
 #
 # Parser
@@ -142,22 +147,82 @@ def random_argmax(vector):
 
 
 class tiling10():
-    def __init__(self, seed = 1):
+    def __init__(self, seed = 3):
         np.random.seed(seed)
         self.shift_10_tilings = self.create_tilings()
 
     def create_tilings(self):
-        return np.random.uniform(low=0.0, high=.1,size=10)
+        a = np.random.uniform(low=0.0, high=.1,size=10)
+        a = np.sort(a)
+        #print("tiling: ", a)
+        return a
+        #return np.random.uniform(low=0.0, high=.1,size=10)
 
     def build_features(self, num):
         a = np.zeros(11*10)
         for pos in range(10):
             ind = int(np.ceil((num - self.shift_10_tilings[pos])/0.1))
-            a[ind + pos * 11] = 1
+            #a[ind + pos * 11] = 1
+            #set_LFPR.add(ind + pos * 11)
+            a[ind*10 + pos] = 1
+            #set_LFPR.add(ind*10 + pos)
         return a
 
 
+class td_lambda_agent():
+    def __init__(self,alpha, lammbda, tiling, seeds):
+        self.alpha = alpha
+        self.lammbda = lammbda
+        self.ws = np.array([np.zeros(11*10) for _ in range(NB_RUNS)]) # is there a bias here, I assume no ??
+        # In addition, add a feature corresponding to each interval that takes the value 1 when the state was within that tile, and 0 otherwise ??
+        self.tiling = tiling
+        assert len(seeds) == NB_RUNS, "seed must have size NB_RUNS"
+        self.seeds = seeds
+        self.average_w = np.zeros(11*10)
 
+    def train_all_runs(self):
+        for run_id in range(len(self.ws)):
+            np.random.seed(self.seeds[run_id])
+            self.train_one_run(run_id)
+        self.average_w = np.mean(self.ws, axis=0)
+        #return self.ws
+
+    def train_one_run(self, run_id):
+        for episode in range(NB_EPISODES):
+            self.ws[run_id] = self.train_one_episode(self.ws[run_id])
+
+    def train_one_episode(self, w):
+        z = np.zeros(110)
+        s = 0.5
+        cont = True
+        while cont:
+            f_s = self.tiling.build_features(s)
+            sp = s + np.random.uniform(low=-0.2, high=0.2)
+            if sp >1.0 or sp < 0.0:
+                r = sp
+                cont = False
+            else:
+                r = 0
+                f_sp = self.tiling.build_features(sp)
+            z = self.lammbda * z + f_s
+            v_s = np.sum(w * f_s)
+            if cont:
+                v_sp = np.sum(w * f_sp)
+            else:
+                v_sp = 0
+            delta = r + v_sp - v_s
+            w = w + self.alpha * delta * z
+            s = sp
+        return w
+
+    def msve(self, l_nums):
+        assert len(l_nums) > 0
+        tot = 0
+        for num in l_nums:
+            v = np.sum(self.average_w * self.tiling.build_features(num))
+            tot += (v - num)**2
+        avg_msve = tot / len(l_nums)
+        return avg_msve
 
 
 
@@ -176,10 +241,32 @@ def main():
     # parses command line arguments
     args = get_arguments()
 
-    tilings= tiling10(2)
-    #print(tilings.shift_10_tilings)
-    #print(tilings.build_features(0.32))
-    #print(tilings.build_features(0.33))
+    tilings= tiling10(5)
+    print("tiling:", tilings.shift_10_tilings)
+    """
+    for i in range(21):
+        print(i*0.05, tilings.build_features(i*0.05))
+    print("0.32:", tilings.build_features(0.32))
+    print("0.33:", tilings.build_features(0.33))
+    """
+
+    agents = {}
+    for (alpha, lammbda) in [(0.1, 0.4)]: #[(0.03* i, 0.2) for i in range(0,10)]:
+        #alpha = 0.1
+        #lammbda = 0.5
+        #seeds = list(range(NB_RUNS))
+        seeds = np.arange(NB_RUNS)
+        #seeds = [6]
+        agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings, seeds)
+        agents[(alpha, lammbda)].train_all_runs()
+        #print("ws: ", agents[(alpha, lammbda)].ws)
+        #print("average w: :", agents[(alpha, lammbda)].average_w)
+
+        valid_nums = np.arange(21) * 0.05
+        print("msve for alpha = {} and lammbda = {}: ".format(alpha, lammbda), agents[(alpha, lammbda)].msve(valid_nums))
+
+    #print("set: ", set_LFPR)
+    #print(len(set_LFPR))
 
 
 if __name__ == '__main__':
