@@ -220,7 +220,7 @@ class td_lambda_agent():
         tot = 0
         for num in l_nums:
             v = np.sum(self.average_w * self.tiling.build_features(num))
-            print("v={} for num={}".format(v, num))
+            #print("v={} for num={}".format(v, num))
             tot += (v - num)**2
         avg_msve = tot / len(l_nums)
         return avg_msve
@@ -252,23 +252,46 @@ def main():
     """
 
     agents = {}
-    for (alpha, lammbda) in [(0.08, 0.4)]: #[(0.03* i, 0.2) for i in range(0,10)]:
-        print("for alpha = {} and lammbda = {}".format(alpha, lammbda))
-        #alpha = 0.1
-        #lammbda = 0.5
-        #seeds = list(range(NB_RUNS))
-        seeds = np.arange(NB_RUNS)
-        #seeds = [6]
-        agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings, seeds)
-        agents[(alpha, lammbda)].train_all_runs()
-        #print("ws: ", agents[(alpha, lammbda)].ws)
-        #print("average w: :", agents[(alpha, lammbda)].average_w)
 
-        valid_nums = np.arange(21) * 0.05
-        print("msve for alpha = {} and lammbda = {}: ".format(alpha, lammbda), agents[(alpha, lammbda)].msve(valid_nums))
+    d_alpha_to_lammbdas = {}
+    #d_alpha_to_lammbdas[0.025] = np.round(np.arange(21) * 0.05, 2)
+    #d_alpha_to_lammbdas[0.05] = np.round(np.arange(20) * 0.05,2)
+    #d_alpha_to_lammbdas[0.075] = np.round(np.arange(19) * 0.05, 2)
+    #d_alpha_to_lammbdas[0.1] = np.round(np.arange(17) * 0.05, 2)
+    #d_alpha_to_lammbdas[0.125] = np.round(np.arange(14) * 0.05, 2)
+    #d_alpha_to_lammbdas[0.14] = np.round(np.arange(14) * 0.05, 2)
+    d_alpha_to_lammbdas[0.50] = np.round(np.arange(14) * 0.05, 2)
+
+
+
+
+    d_msve = {}
+
+    #for (alpha, lammbda) in [(0.05, 0.7)]: #[(0.03* i, 0.2) for i in range(0,10)]:
+    for alpha, l_lammbda in d_alpha_to_lammbdas.items():
+        d_msve[alpha] = {}
+        for lammbda in l_lammbda:
+            print("for alpha = {} and lammbda = {}".format(alpha, lammbda))
+            #alpha = 0.1
+            #lammbda = 0.5
+            #seeds = list(range(NB_RUNS))
+            seeds = np.arange(NB_RUNS)
+            #seeds = [6]
+            agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings, seeds)
+            agents[(alpha, lammbda)].train_all_runs()
+            #print("ws: ", agents[(alpha, lammbda)].ws)
+            #print("average w: :", agents[(alpha, lammbda)].average_w)
+
+            valid_nums = np.round(np.arange(21) * 0.05,2)
+            mean_square_error = agents[(alpha, lammbda)].msve(valid_nums)
+            print("msve for alpha = {} and lammbda = {}: ".format(alpha, lammbda), mean_square_error)
+            d_msve[alpha][lammbda] = mean_square_error
+
 
     #print("set: ", set_LFPR)
     #print(len(set_LFPR))
+
+    print(d_msve)
 
 
 if __name__ == '__main__':
