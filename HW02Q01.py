@@ -19,7 +19,7 @@ NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = None
 # SEED = 197710
 
-NB_EPISODES = 25 # 25
+NB_EPISODES = 250 # 25
 NB_RUNS = 50 # 50
 
 seed_count = 1
@@ -123,10 +123,14 @@ def plot_lambdas_w_alphas(d_msve, title = None):
         for alpha in d_lammbda.keys():
             l_alphas_for_lammbda.append(alpha)
         l_alphas_for_lammbda.sort()
-        x = l_alphas_for_lammbda
-        y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
-        print("x: ", x)
-        print("y: ", y)
+        X = l_alphas_for_lammbda
+        Y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
+        print("x: ", X)
+        print("y: ", Y)
+        plt.plot(X, Y)
+
+    plt.ylim(0.0, .01)
+    plt.show()
 
 
 # #############################################################################
@@ -274,15 +278,15 @@ def main():
     d_lammbda_to_alphas = {}
 
     d_lammbda_to_alphas[0.0] = np.round(np.arange(15) * 0.01, 2)
-    d_lammbda_to_alphas[0.1] = np.round(np.arange(15) * 0.01, 2)
-    d_lammbda_to_alphas[0.2] = np.round(np.arange(16) * 0.01, 2)
-    #d_lammbda_to_alphas[0.3] = np.round(np.arange(16) * 0.01, 2)
+    #d_lammbda_to_alphas[0.1] = np.round(np.arange(15) * 0.01, 2)
+    #d_lammbda_to_alphas[0.2] = np.round(np.arange(16) * 0.01, 2)
+    d_lammbda_to_alphas[0.3] = np.round(np.arange(15) * 0.01, 2)
     #d_lammbda_to_alphas[0.4] = np.round(np.arange(15) * 0.01, 2)
     #d_lammbda_to_alphas[0.5] = np.round(np.arange(15) * 0.01, 2)
-    #d_lammbda_to_alphas[0.6] = np.round(np.arange(14) * 0.01, 2)
+    d_lammbda_to_alphas[0.6] = np.round(np.arange(14) * 0.01, 2)
     #d_lammbda_to_alphas[0.7] = np.round(np.arange(13) * 0.01, 2)
     #d_lammbda_to_alphas[0.8] = np.round(np.arange(11) * 0.01, 2)
-    #d_lammbda_to_alphas[0.9] = np.round(np.arange(8) * 0.01, 2)
+    d_lammbda_to_alphas[0.9] = np.round(np.arange(8) * 0.01, 2)
     #d_lammbda_to_alphas[0.95] = np.round(np.arange(6) * 0.01, 2)
     #d_lammbda_to_alphas[1.0] = np.round(np.arange(4) * 0.01, 2)
 
