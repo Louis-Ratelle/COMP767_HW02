@@ -19,10 +19,10 @@ NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = None
 # SEED = 197710
 
-NB_EPISODES = 250 # 25
+NB_EPISODES = 25 # 25
 NB_RUNS = 50 # 50
 
-seed_count = 1
+seed_count = 4
 
 #set_LFPR = set()
 
@@ -127,9 +127,10 @@ def plot_lambdas_w_alphas(d_msve, title = None):
         Y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
         print("x: ", X)
         print("y: ", Y)
-        plt.plot(X, Y)
+        plt.plot(X, Y, label = lammbda)
 
-    plt.ylim(0.0, .01)
+    plt.ylim(0.0, 0.2)
+    plt.legend()
     plt.show()
 
 
@@ -287,9 +288,10 @@ def main():
     #d_lammbda_to_alphas[0.7] = np.round(np.arange(13) * 0.01, 2)
     #d_lammbda_to_alphas[0.8] = np.round(np.arange(11) * 0.01, 2)
     d_lammbda_to_alphas[0.9] = np.round(np.arange(8) * 0.01, 2)
-    #d_lammbda_to_alphas[0.95] = np.round(np.arange(6) * 0.01, 2)
-    #d_lammbda_to_alphas[1.0] = np.round(np.arange(4) * 0.01, 2)
+    d_lammbda_to_alphas[0.95] = np.round(np.arange(6) * 0.01, 2)
+    d_lammbda_to_alphas[1.0] = np.round(np.arange(4) * 0.01, 2)
 
+    #d_lammbda_to_alphas[0.3] = np.round([0.25], 2)
 
     d_msve = {}
 
