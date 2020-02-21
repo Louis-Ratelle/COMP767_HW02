@@ -3,7 +3,8 @@ import gym
 import argparse
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-import tiling
+from tiling import tiles, IHT
+# import tiling
 
 SEED = None
 GAMMA = 1
@@ -41,34 +42,36 @@ def get_arguments():
     parser.add_argument('--seed', type=int, default=SEED,
                         help='Seed for the random number generator.')
     parser.add_argument('--env', type=str, default=ENV,
-                        help="The environment to be used. Default:"
+                        help='The environment to be used. Default: '
                         + ENV)
     parser.add_argument('--gamma', type=float, default=GAMMA,
                         help='Defines the discount rate. Default: '
                         + str(GAMMA))
     parser.add_argument('--epsilon', type=float, default=EPSILON,
                         help='Defines the parameter epsilon for the '
-                        'epsilon-greedy policy. Default: '
-                        + str(EPSILON))
+                        'epsilon-greedy policy. The algorithm will '
+                        'perform an exploratory action with probability '
+                        'epsilon. Default: ' + str(EPSILON))
     parser.add_argument('-t', '--tilings', type=int, default=TILINGS,
-                        help='Number of runs to be executed. Default: '
+                        help='Number of tiles to use. Default: '
                         + str(TILINGS))
     parser.add_argument('-s', '--size', type=int, default=SIZE,
-                        help='Size of index hash table of the tiling algorithm. ''
-                        'Default: ' + str(SIZE))
-    parser.add_argument('-n', '--runs', type=int, default=RUNS,
+                        help='Size of each tile, generally a square number. '
+                        'This corresponds to the size index hash table of the '
+                        'tiling algorithm. Default: ' + str(SIZE))
+    parser.add_argument('-r', '--runs', type=int, default=RUNS,
                         help='Number of runs to be executed. Default: '
                         + str(RUNS))
-    parser.add_argument('--episodes', type=int,
+    parser.add_argument('-e', '--episodes', type=int,
                         default=EPISODES,
-                        help='Number of episodes to be executed. '
-                        'Default: ' + str(EPISODES))
+                        help='Number of episodes to be executed in a single '
+                        'run. Default: ' + str(EPISODES))
     parser.add_argument('--max_steps', type=int, default=MAX_STEPS,
                         help='Number of maximum steps allowed in a single '
                         'episode. Default: ' + str(MAX_STEPS))
     parser.add_argument('-v', '--verbose', action="store_true",
-                        help='If this flag is set, the algorithm will generate '
-                        'more output, useful for debugging.')
+                        help='If this flag is set, the algorithm will '
+                        'generate more output, useful for debugging.')
 
     parser.add_argument('--tol', type=float, default=TOL,
                         help='Defines the tolerance for convergence of the '
@@ -149,6 +152,21 @@ def plot_line_variance(ax, data, delta=1):
 
 # #############################################################################
 #
+# Helper functions
+#
+# #############################################################################
+
+
+def random_argmax(vector):
+    '''Select argmax at random... not just first one.'''
+
+    index = np.random.choice(np.where(vector == vector.max())[0])
+
+    return index
+
+
+# #############################################################################
+#
 # Experience
 #
 # #############################################################################
@@ -165,17 +183,84 @@ class agent():
 def get_features(state, action):
     '''For a state [x, xdot] and action
     returns the feature vector as defined in Sutton, R. Reinforcement
-    Learning, 2nd ed. (2018), Section 10.1, page 246''''
+    Learning, 2nd ed. (2018), Section 10.1, page 246'''
 
     x, xdot = state
 
     # create index hash table
-    iht = tiling.IHT(args.size)
-    features = tiling.tiles(
-        iht, 8, [8 * x / (0.5 + 1.2), 8 * xdot / (0.07 + 0.07)], action
-        )
+    iht = IHT(args.size)
+    features = np.array(tiles(
+        iht, 8, [8 * x / (0.5 + 1.2), 8 * xdot / (0.07 + 0.07)], [action]
+        ))
 
     return features
+
+
+def greedy_action(env, iht, state, weights):
+    q = np.zeros(env.action_space.n)
+    features = np.zeros(args.tilings * args.size)
+
+    for action in range(env.action_space.n):
+        features[f(state, action)] = 1
+        q[action] = np.dot(weights, features)
+
+    action = random_argmax(q)
+    if args.verbose:
+        print('greedy action: {}'.format(action))
+
+    return action
+
+
+def random_action(env):
+    action = env.action_space.sample()
+    if args.verbose:
+        print('Random action: {}'.format(action))
+    return action
+
+
+def choose_action(env, state, weights):
+    choices = ['random', 'greedy']
+    c = np.random.choice(choices, p=[args.epsilon, 1 - args.epsilon])
+    if c == 'random':
+        return random_action(env)
+    else:
+        return greedy_action(env, state, weights)
+
+
+def f(iht, s, a):
+    '''Returns list of indices where the features are active.
+
+    Input:
+    s   : state
+    a   : action
+
+    Output:
+    list of indices where features are active. The list has
+    length args.tilings (the number of active features) and
+    each element on the list can go from
+    0 to args.tilings * args.size - 1'''
+
+    # get position and velocity from state s
+    x, xdot = s
+
+    # For a state s = [x, xdot] and action a
+    # obtain indices for each tiling as defined in Sutton, R. Reinforcement
+    # Learning, 2nd ed. (2018), Section 10.1, page 246'''
+    indices = tiles(
+        iht, 8, [8 * x / (0.5 + 1.2), 8 * xdot / (0.07 + 0.07)], [a]
+        )
+
+    # active_features = np.zeros(args.tilings * args.size)
+
+    # for i, idx in enumerate(indices):
+    #     active_features[i * args.tilings + idx] = 1
+
+    active_idx = [i * args.size + idx for i, idx in enumerate(indices)]
+    if args.verbose:
+        print('State: {}, Action: {}'.format(s, a))
+        print(indices)
+        print(active_idx)
+    return active_idx
 
 
 def sarsa(env, lammbda, alpha, seed=None):
@@ -185,27 +270,39 @@ def sarsa(env, lammbda, alpha, seed=None):
 
     # initialize environement and weights
     env.seed(seed)
-    env.reset()
-    state = env.state()
-    action = env.action_space.sample()
-    features = get_features(state, action)
-    w = np.zeros(features.shape)
-    steps = 0
+    w = np.zeros(args.tilings * args.size)
 
     for episode in range(args.episodes):
-        state = env.state
-        action = choose_action()
-        z = np.zeros(features.shape)
-        while not (done or steps > args.max_steps):
+        steps = 0
+        env.reset()
+        state0 = env.state
+        action0 = choose_action(env, state0, w)
+        z = np.zeros(w.shape)
+
+        # create index hash table
+        iht = IHT(args.size)
+
+        while steps < args.max_steps:
             steps += 1
-            observation, reward, done, info = env.step(action)
+            state1, reward, done, info = env.step(action0)
             delta = reward
-            features = get_features(observation, action)
-            for i in :
+            for i in f(iht, state0, action0):
                 delta = delta - w[i]
                 z[i] = 1
+            if done:
+                w = w + alpha * delta * z
+                # go to next episode
+                break
+            action1 = choose_action(env, state1, w)
+            for i in f(iht, state1, action1):
+                delta = delta + args.gamma * w[i]
+            w = w + alpha * delta * z
+            z = args.gamma * lammbda * z
+            state0 = state1
+            action0 = action1
 
-
+        print('Episode {} finished after {} steps'.format(episode + 1, steps))
+    env.close()
 
 # #############################################################################
 #
@@ -217,29 +314,13 @@ def sarsa(env, lammbda, alpha, seed=None):
 args = get_arguments()
 
 
-def MountainCar():
-    import gym
-
-    env = gym.make('MountainCar-v0')
-    for i_episode in range(20):
-        observation = env.reset()
-        for t in range(100):
-            env.render()
-            print(observation)
-            action = env.action_space.sample()
-            observation, reward, done, info = env.step(action)
-            if done:
-                print("Episode finished after {} timesteps".format(t+1))
-                break
-    env.close()
-
 def main():
 
     # sets the seed for random experiments
     np.random.seed(args.seed)
 
-    # sets the environment
-    MountainCar()
+    env = gym.make(args.env)
+    sarsa(env, lammbda=0.9, alpha=0.1, seed=args.seed)
 
 
 if __name__ == '__main__':
