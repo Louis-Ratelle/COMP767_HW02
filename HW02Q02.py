@@ -59,7 +59,7 @@ def get_arguments():
                         help='Size of each tile, generally a square number. '
                         'This corresponds to the size index hash table of the '
                         'tiling algorithm. Default: ' + str(SIZE))
-    parser.add_argument('-r', '--runs', type=int, default=RUNS,
+    parser.add_argument('-n', '--runs', type=int, default=RUNS,
                         help='Number of runs to be executed. Default: '
                         + str(RUNS))
     parser.add_argument('-e', '--episodes', type=int,
@@ -72,6 +72,9 @@ def get_arguments():
     parser.add_argument('-v', '--verbose', action="store_true",
                         help='If this flag is set, the algorithm will '
                         'generate more output, useful for debugging.')
+    parser.add_argument('-r', '--render', action="store_true",
+                        help='If this flag is set, each episode will be '
+                        'rendered.')
 
     parser.add_argument('--tol', type=float, default=TOL,
                         help='Defines the tolerance for convergence of the '
@@ -172,12 +175,11 @@ def random_argmax(vector):
 
 def greedy_action(env, state, weights):
     q = np.zeros(env.action_space.n)
-    # features = np.zeros(args.tilings * args.size)
-    features = np.zeros(args.size)
 
     for action in range(env.action_space.n):
-        features[f(state, action)] = 1
-        q[action] = np.dot(weights, features)
+        # features[f(state, action)] = 1
+        # q[action] = np.dot(weights, features)
+        q[action] = np.sum(weights[f(state, action)])
 
     action = random_argmax(q)
     if args.verbose:
@@ -224,13 +226,6 @@ def f(s, a):
     indices = tiles(
         iht, 8, [8 * x / (0.5 + 1.2), 8 * xdot / (0.07 + 0.07)], [a]
         )
-
-    # active_features = np.zeros(args.tilings * args.size)
-
-    # for i, idx in enumerate(indices):
-    #     active_features[i * args.tilings + idx] = 1
-
-    #active_idx = [i * args.size + idx for i, idx in enumerate(indices)]
     active_idx = indices
     if args.verbose:
         print('State: {}, Action: {}'.format(s, a))
@@ -239,17 +234,20 @@ def f(s, a):
     return active_idx
 
 
-def sarsa(env, lammbda, alpha, seed=None):
+def sarsa(env, lmbda, alpha, seed=None):
 
     assert alpha > 0
-    assert 0 <= lammbda <= 1
+    assert 0 <= lmbda <= 1
 
     # initialize environement and weights
     env.seed(seed)
-    #w = np.zeros(args.tilings * args.size)
     w = np.zeros(args.size)
+    steps_per_episode = np.zeros(args.episodes)
 
-    for episode in range(args.episodes):
+    # create index hash table
+    iht = IHT(args.size)
+
+    for episode in tqdm(range(args.episodes)):
 
         steps = 0
         env.reset()
@@ -260,7 +258,7 @@ def sarsa(env, lammbda, alpha, seed=None):
         while steps < args.max_steps:
             steps += 1
             state1, reward, done, info = env.step(action0)
-            # env.render()
+            if args.render: env.render()
             delta = reward
             for i in f(state0, action0):
                 delta = delta - w[i]
@@ -273,12 +271,16 @@ def sarsa(env, lammbda, alpha, seed=None):
             for i in f(state1, action1):
                 delta = delta + args.gamma * w[i]
             w = w + alpha * delta * z
-            z = args.gamma * lammbda * z
+            z = args.gamma * lmbda * z
             state0 = state1
             action0 = action1
 
-        print('Episode {} finished after {} steps.'.format(episode + 1, steps))
+        steps_per_episode[episode] = steps
+        if args.verbose:
+            print('Episode {} finished after {} steps.'.format(episode + 1, steps))
     env.close()
+
+    return steps_per_episode
 
 # #############################################################################
 #
@@ -287,9 +289,24 @@ def sarsa(env, lammbda, alpha, seed=None):
 # #############################################################################
 
 
+# global variables
 args = get_arguments()
-# create index hash table
 iht = IHT(args.size)
+
+
+def runs(env, alphas, lambdas):
+    steps = np.zeros((len(lambdas), len(alphas), args.runs, args.episodes))
+    for lambda_idx, lmbda in enumerate(lambdas):
+        for alpha_idx, alpha in enumerate(alphas):
+            print('Running Sarsa({}) with learning rate {}'.format(lmbda, alpha))
+            for run in tqdm(range(args.runs)):
+                # sets a new seed for each run
+                seed = np.random.randint(0, 2**32 - 1)
+
+                steps[lambda_idx, alpha_idx, run, :] = sarsa(
+                    env, lmbda, alpha, seed)
+
+    return steps
 
 
 def main():
@@ -299,8 +316,10 @@ def main():
 
     env = gym.make(args.env)
     env._max_episode_steps = args.max_steps
-    sarsa(env, lammbda=0.95, alpha=1.0/8, seed=args.seed)
-
+    # sarsa(env, lmbda=0.95, alpha=1.0/8, seed=args.seed)
+    alphas = (0.5 + np.arange(0, 2, step=0.5)) / args.tilings
+    lambdas = [1, 0.99, 0.95, 0.5, 0]
+    steps = runs(env, alphas, lambdas)
 
 if __name__ == '__main__':
     main()
