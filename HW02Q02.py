@@ -3,8 +3,8 @@ import gym
 import argparse
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from tqdm import tqdm
 from tiling import tiles, IHT
-# import tiling
 
 SEED = None
 GAMMA = 1
@@ -156,7 +156,6 @@ def plot_line_variance(ax, data, delta=1):
 #
 # #############################################################################
 
-
 def random_argmax(vector):
     '''Select argmax at random... not just first one.'''
 
@@ -167,38 +166,14 @@ def random_argmax(vector):
 
 # #############################################################################
 #
-# Experience
+# Sarsa
 #
 # #############################################################################
 
-class Experience():
-    def __init__(self, env, agent):
-        pass
-
-
-class agent():
-    pass
-
-
-def get_features(state, action):
-    '''For a state [x, xdot] and action
-    returns the feature vector as defined in Sutton, R. Reinforcement
-    Learning, 2nd ed. (2018), Section 10.1, page 246'''
-
-    x, xdot = state
-
-    # create index hash table
-    iht = IHT(args.size)
-    features = np.array(tiles(
-        iht, 8, [8 * x / (0.5 + 1.2), 8 * xdot / (0.07 + 0.07)], [action]
-        ))
-
-    return features
-
-
-def greedy_action(env, iht, state, weights):
+def greedy_action(env, state, weights):
     q = np.zeros(env.action_space.n)
-    features = np.zeros(args.tilings * args.size)
+    # features = np.zeros(args.tilings * args.size)
+    features = np.zeros(args.size)
 
     for action in range(env.action_space.n):
         features[f(state, action)] = 1
@@ -227,7 +202,7 @@ def choose_action(env, state, weights):
         return greedy_action(env, state, weights)
 
 
-def f(iht, s, a):
+def f(s, a):
     '''Returns list of indices where the features are active.
 
     Input:
@@ -255,7 +230,8 @@ def f(iht, s, a):
     # for i, idx in enumerate(indices):
     #     active_features[i * args.tilings + idx] = 1
 
-    active_idx = [i * args.size + idx for i, idx in enumerate(indices)]
+    #active_idx = [i * args.size + idx for i, idx in enumerate(indices)]
+    active_idx = indices
     if args.verbose:
         print('State: {}, Action: {}'.format(s, a))
         print(indices)
@@ -270,23 +246,23 @@ def sarsa(env, lammbda, alpha, seed=None):
 
     # initialize environement and weights
     env.seed(seed)
-    w = np.zeros(args.tilings * args.size)
+    #w = np.zeros(args.tilings * args.size)
+    w = np.zeros(args.size)
 
     for episode in range(args.episodes):
+
         steps = 0
         env.reset()
         state0 = env.state
         action0 = choose_action(env, state0, w)
         z = np.zeros(w.shape)
 
-        # create index hash table
-        iht = IHT(args.size)
-
         while steps < args.max_steps:
             steps += 1
             state1, reward, done, info = env.step(action0)
+            # env.render()
             delta = reward
-            for i in f(iht, state0, action0):
+            for i in f(state0, action0):
                 delta = delta - w[i]
                 z[i] = 1
             if done:
@@ -294,14 +270,14 @@ def sarsa(env, lammbda, alpha, seed=None):
                 # go to next episode
                 break
             action1 = choose_action(env, state1, w)
-            for i in f(iht, state1, action1):
+            for i in f(state1, action1):
                 delta = delta + args.gamma * w[i]
             w = w + alpha * delta * z
             z = args.gamma * lammbda * z
             state0 = state1
             action0 = action1
 
-        print('Episode {} finished after {} steps'.format(episode + 1, steps))
+        print('Episode {} finished after {} steps.'.format(episode + 1, steps))
     env.close()
 
 # #############################################################################
@@ -312,6 +288,8 @@ def sarsa(env, lammbda, alpha, seed=None):
 
 
 args = get_arguments()
+# create index hash table
+iht = IHT(args.size)
 
 
 def main():
@@ -320,7 +298,8 @@ def main():
     np.random.seed(args.seed)
 
     env = gym.make(args.env)
-    sarsa(env, lammbda=0.9, alpha=0.1, seed=args.seed)
+    env._max_episode_steps = args.max_steps
+    sarsa(env, lammbda=0.95, alpha=1.0/8, seed=args.seed)
 
 
 if __name__ == '__main__':
