@@ -62,6 +62,7 @@ def get_arguments():
 #
 # #############################################################################
 
+"""
 def plot_line_variance(ax, data, gamma=1):
     '''Plots the average data for each time step and draws a cloud
     of the standard deviation around the average.
@@ -82,6 +83,77 @@ def plot_line_variance(ax, data, gamma=1):
                     facecolor='red',
                     alpha=0.2)
     ax.plot(avg)
+"""
+
+def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
+    '''Creates the two required plots: cumulative_reward and number of timesteps
+        per episode.'''
+
+    #fig, axs = plt.subplots(nrows=1, ncols=6,
+                            #constrained_layout=True,
+                            #sharey=True,
+                            #figsize=(10, 3))
+
+    #fig.suptitle(title, fontsize=12)
+
+    for id_ax, (lammbda, l_alphas) in enumerate(d_lammbda_to_alphas.items()):
+        label = "lambda = {}".format(lammbda)
+        color = "C" + str(id_ax)
+        data  = d_msves_for_lambda[lammbda]
+        plot_line_variance(l_alphas, data, label, color, axis=0, delta=1)
+
+    #plt.show()
+
+    """
+    plot_lambdas(axs[0], steps, x_values=alphas, series=lambdas)
+    axs[0].set_xlabel('alpha')
+    axs[0].set_ylabel('Average steps')
+    axs[0].set_title('Sarsa($\\lambda$)')
+    axs[0].legend()
+    # axs[0].set_prop_cycle(cycler('color', ['c', 'm', 'y', 'k']))
+
+    plot_alphas(axs[1], steps, x_values=lambdas, series=alphas)
+    axs[1].set_xlabel('lambda')
+    axs[1].set_ylabel('Average steps')
+    axs[1].set_title('Learning rate')
+    axs[1].legend()
+
+    plot_alphas2(axs[1], steps, x_values=lambdas, series=alphas)
+    axs[1].set_xlabel('lambda')
+    axs[1].set_ylabel('Average steps')
+    axs[1].set_title('Learning rate')
+    axs[1].legend()
+    """
+
+
+
+
+def plot_line_variance(x_values, data, label, color, axis=0, delta=1):
+    '''Plots the average data for each time step and draws a cloud
+    of the standard deviation around the average.
+    Input:
+    ax      : axis object where the plot will be drawn
+    data    : data of shape (num_trials, timesteps)
+    color   : the color to be used
+    delta   : (optional) scaling of the standard deviation around the average
+              if ommitted, delta = 1.'''
+
+    avg = np.average(data, axis)
+    std = np.std(data, axis)
+
+    # ax.plot(avg + delta * std, color + '--', linewidth=0.5)
+    # ax.plot(avg - delta * std, color + '--', linewidth=0.5)
+    fig, ax = plt.subplots(nrows=1, ncols=1,
+                            constrained_layout=True,
+                            sharey=True,
+                            figsize=(5,5))
+    ax.fill_between(x_values,
+                    avg + delta * std,
+                    avg - delta * std,
+                    facecolor=color,
+                    alpha=0.2)
+    ax.plot(x_values, avg, label=label, color=color, marker='.')
+    plt.show()
 
 
 def plot4(title, training_return, training_regret, testing_reward, testing_regret):
@@ -117,8 +189,8 @@ def plot_lambdas_w_alphas(d_msve, title = None):
         l_alphas_for_lammbda.sort()
         X = l_alphas_for_lammbda
         Y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
-        print("x: ", X)
-        print("y: ", Y)
+        #print("x: ", X)
+        #print("y: ", Y)
         plt.plot(X, Y, label = lammbda)
 
     plt.ylim(0.0, 0.2)
@@ -190,6 +262,7 @@ class td_lambda_agent():
         # In addition, add a feature corresponding to each interval that takes the value 1 when the state was within that tile, and 0 otherwise ??
         self.tiling = tiling
         self.average_w = np.zeros(11*10)
+        self.msves = {}
 
     def train_all_runs(self):
         for run_id in range(len(self.ws)):
@@ -229,16 +302,18 @@ class td_lambda_agent():
             s = sp
         return w
 
-    def msve(self, l_nums):
+    def msve(self, lammbda, l_nums, alpha_pos, d_msves_for_lambda):
         assert len(l_nums) > 0
         l_msve = []
-        for w in self.ws:
+
+        for run_id, w in enumerate(self.ws):
             tot = 0
             for num in l_nums:
                 v = np.sum(w * self.tiling.build_features(num))
                 #print("v={} for num={}".format(v, num))
                 tot += (v - num)**2
             l_msve.append(tot / len(l_nums))
+            d_msves_for_lambda[lammbda][run_id, alpha_pos] = tot / len(l_nums)
         self.l_msve = l_msve
         return np.mean(self.l_msve)
 
@@ -276,7 +351,7 @@ def main():
     args = get_arguments()
 
     tilings= tiling10(5)
-    print("tiling:", tilings.shift_10_tilings)
+    #print("tiling:", tilings.shift_10_tilings)
     """
     for i in range(21):
         print(i*0.05, tilings.build_features(i*0.05))
@@ -295,7 +370,7 @@ def main():
     d_lammbda_to_alphas[0.6] = np.round(np.arange(12) * 0.01, 2)
     d_lammbda_to_alphas[0.75] = np.round(np.arange(10) * 0.01, 2)
     #d_lammbda_to_alphas[0.9] = np.round(np.arange(7) * 0.01, 2)
-    d_lammbda_to_alphas[0.95] = np.round(np.arange(6) * 0.01, 2)
+    d_lammbda_to_alphas[0.95] = np.round(np.arange(5) * 0.01, 2)
     #d_lammbda_to_alphas[0.98] = np.round(np.arange(6) * 0.01, 2)
     #d_lammbda_to_alphas[1.0] = np.round(np.arange(3) * 0.01, 2)
 
@@ -314,11 +389,15 @@ def main():
 
     d_msve = {}
     d_std_msve = {}
+    d_msves_for_lambda = {}
 
     for lammbda, l_alphas in d_lammbda_to_alphas.items():
         d_msve[lammbda] = {}
         d_std_msve[lammbda] = {}
-        for alpha in l_alphas:
+        nb_alphas = len(l_alphas)
+        d_msves_for_lambda[lammbda] = np.zeros((NB_RUNS, nb_alphas))
+
+        for alpha_pos, alpha in enumerate(l_alphas):
             print("for lammbda = {} and alpha = {}".format(lammbda, alpha))
             #alpha = 0.1
             #lammbda = 0.5
@@ -328,7 +407,7 @@ def main():
             #print("average w: :", agents[(alpha, lammbda)].average_w)
 
             valid_nums = np.round(np.arange(21) * 0.05,2)
-            mean_square_error = agents[(alpha, lammbda)].msve(valid_nums)
+            mean_square_error = agents[(alpha, lammbda)].msve(lammbda, valid_nums, alpha_pos, d_msves_for_lambda)
             print("msve for lammbda = {} and alpha = {}: ".format(lammbda, alpha), mean_square_error)
             d_msve[lammbda][alpha] = mean_square_error
             std_of_mean_square_errors = agents[(alpha, lammbda)].variance_curves(valid_nums)
@@ -342,6 +421,8 @@ def main():
     #print(d_msve)
 
     plot_lambdas_w_alphas(d_msve)
+    #print(d_msves_for_lambda)
+    plot_all_variances("lambda = {}".format(lammbda), d_lammbda_to_alphas, d_msves_for_lambda)
 
 
 if __name__ == '__main__':
