@@ -3,8 +3,12 @@ import gym
 import argparse
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import pickle
+import os
+import sys
 from tqdm import tqdm
 from tiling import tiles, IHT
+from datetime import datetime
 
 SEED = None
 GAMMA = 1
@@ -15,11 +19,8 @@ RUNS = 20
 EPISODES = 1000
 MAX_STEPS = 2000
 ENV = 'MountainCar-v0'
-
-TRAINING_EPISODES = 5
-TESTING_EPISODES = 5
-TEST_EVERY = 10
-TOL = 1e-6
+SAVED_MODELS_FOLDER = './data/'
+NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 
 # #############################################################################
 #
@@ -29,16 +30,10 @@ TOL = 1e-6
 
 
 def get_arguments():
-    def _str_to_bool(s):
-        '''Convert string to boolean (in argparse context)'''
-        if s.lower() not in ['true', 'false']:
-            raise ValueError('Argument needs to be a '
-                             'boolean, got {}'.format(s))
-        return {'true': True, 'false': False}[s.lower()]
 
     parser = argparse.ArgumentParser(
-        description='Applying dynamic programming '
-        'to a discrete gym environment.')
+        description='Controlling a gym environment with Sarsa(lambda).')
+
     parser.add_argument('--seed', type=int, default=SEED,
                         help='Seed for the random number generator.')
     parser.add_argument('--env', type=str, default=ENV,
@@ -75,20 +70,10 @@ def get_arguments():
     parser.add_argument('-r', '--render', action="store_true",
                         help='If this flag is set, each episode will be '
                         'rendered.')
-
-    parser.add_argument('--tol', type=float, default=TOL,
-                        help='Defines the tolerance for convergence of the '
-                        'algorithms. Default: ' + str(TOL))
-    parser.add_argument('--training_episodes', type=int,
-                        default=TRAINING_EPISODES,
-                        help='Number of training episodes to be executed.'
-                        'Default: ' + str(TRAINING_EPISODES))
-    parser.add_argument('--testing_episodes', type=int, default=TESTING_EPISODES,
-                        help='Number of testing episodes to be executed.'
-                        'Default: ' + str(TESTING_EPISODES))
-    parser.add_argument('--test_every', type=int, default=TEST_EVERY,
-                        help='Number of training iterations to execute before '
-                        'each test. Default: ' + str(TEST_EVERY))
+    parser.add_argument('-l', '--load', type=str, default=None,
+                        help='Filename of a .pickle pre-saved data saved in '
+                        '{} folder. Please include the .pickle extension.'
+                        .format(SAVED_MODELS_FOLDER))
 
     return parser.parse_args()
 
@@ -100,57 +85,127 @@ def get_arguments():
 # #############################################################################
 
 
-def plot2(title, cumulative_reward_3d, timesteps_3d):
+def plot3(title, steps, alphas, lambdas):
     '''Creates the two required plots: cumulative_reward and number of timesteps
     per episode.'''
 
-    fig, axs = plt.subplots(nrows=1, ncols=2,
+    fig, axs = plt.subplots(nrows=1, ncols=3,
                             constrained_layout=True,
+                            sharey=True,
                             figsize=(10, 3))
 
     fig.suptitle(title, fontsize=12)
 
+    plot_lambdas(axs[0], steps, x_values=alphas, series=lambdas)
+    axs[0].set_xlabel('alpha')
+    axs[0].set_ylabel('Average steps')
+    axs[0].set_title('Sarsa($\\lambda$)')
+    axs[0].legend()
+    # axs[0].set_prop_cycle(cycler('color', ['c', 'm', 'y', 'k']))
 
-    # rewards
-    cumulative_reward_2d = np.ma.mean(cumulative_reward_3d, axis=2)
-    # cumulative_reward_1d = np.array(np.max(np.max(cumulative_reward_3d, axis=2),axis=0))
-    plot_line_variance(axs[0], cumulative_reward_2d)
-    plot_min_max(axs[0], cumulative_reward_2d)
-    axs[0].set_title('Cumulative reward')
-    axs[0].set_xlabel('Iteration #')
+    plot_alphas(axs[1], steps, x_values=lambdas, series=alphas)
+    axs[1].set_xlabel('lambda')
+    axs[1].set_ylabel('Average steps')
+    axs[1].set_title('Learning rate')
+    axs[1].legend()
 
-
-    # timesteps
-    timesteps_2d = np.ma.mean(timesteps_3d, axis=2)
-    # timesteps_1d = np.array(np.min(np.min(timesteps_3d, axis=2), axis=0))
-    plot_line_variance(axs[1], timesteps_2d)
-    plot_min_max(axs[1], timesteps_2d)
-    axs[1].set_title('Timesteps per episode')
-    axs[1].set_xlabel('Iteration #')
+    plot_alphas2(axs[1], steps, x_values=lambdas, series=alphas)
+    axs[1].set_xlabel('lambda')
+    axs[1].set_ylabel('Average steps')
+    axs[1].set_title('Learning rate')
+    axs[1].legend()
 
     plt.show()
 
 
-def plot_line_variance(ax, data, delta=1):
+def plot_lambdas(ax, steps, x_values, series):
+    '''
+    Input:
+    steps   : array of shape
+              (len(lambdas), len(alphas), args.runs, args.episodes)
+              containing the number of steps for each lambda, alpha, run,
+              episode
+    x_values: array of shape len(aplhas) with labels for the x axis
+    series  : array of shape len(lambdas) with the series names for the
+              legend'''
+
+    for lmbda in range(steps.shape[0]):
+        # average number of steps across episodes
+        data = np.average(steps[lmbda, :, :, :], axis=2)
+        plot_line_variance(ax,
+                           x_values,
+                           data,
+                           label='$\\lambda=$' + str(series[lmbda]),
+                           color='C' + str(lmbda),
+                           axis=1)
+
+
+def plot_alphas(ax, steps, x_values, series):
+    '''
+    Input:
+    steps   : array of shape
+              (len(lambdas), len(alphas), args.runs, args.episodes)
+              containing the number of steps for each lambda, alpha, run,
+              episode
+    x_values: array of shape len(lambdas) with labels for the x axis
+    series  : array of shape len(alphas) with the series names for the
+              legend'''
+
+    for alpha in range(steps.shape[1]):
+        # average number of steps across episodes
+        data = np.average(steps[:, alpha, :, :], axis=2)
+        plot_line_variance(ax,
+                           x_values,
+                           data,
+                           label='$\\alpha=$' + str(series[alpha]),
+                           color='C' + str(alpha),
+                           axis=1)
+
+
+def plot_alphas2(ax, steps, x_values, series):
+    '''
+    Input:
+    steps   : array of shape
+              (len(lambdas), len(alphas), args.runs, args.episodes)
+              containing the number of steps for each lambda, alpha, run,
+              episode
+    x_values: array of shape len(lambdas) with labels for the x axis
+    series  : array of shape len(alphas) with the series names for the
+              legend'''
+
+    for alpha in range(steps.shape[1]):
+        # average number of steps across episodes
+        data = np.average(steps[:, alpha, :, :], axis=2)
+        plot_line_variance(ax,
+                           x_values,
+                           data,
+                           label='$\\alpha=$' + str(series[alpha]),
+                           color='C' + str(alpha),
+                           axis=1)
+
+
+def plot_line_variance(ax, x_values, data, label, color, axis=0, delta=1):
     '''Plots the average data for each time step and draws a cloud
     of the standard deviation around the average.
 
-    ax:     axis object where the plot will be drawn
-    data:   data of shape (num_trials, timesteps)
-    delta:  (optional) scaling of the standard deviation around the average
-            if ommitted, delta = 1.'''
+    Input:
+    ax      : axis object where the plot will be drawn
+    data    : data of shape (num_trials, timesteps)
+    color   : the color to be used
+    delta   : (optional) scaling of the standard deviation around the average
+              if ommitted, delta = 1.'''
 
-    avg = np.ma.average(data, axis=0)
-    std = np.ma.std(data, axis=0)
+    avg = np.average(data, axis)
+    std = np.std(data, axis)
 
-    # ax.plot(avg + delta * std, 'r--', linewidth=0.5)
-    # ax.plot(avg - delta * std, 'r--', linewidth=0.5)
-    ax.fill_between(range(len(avg)),
+    # ax.plot(avg + delta * std, color + '--', linewidth=0.5)
+    # ax.plot(avg - delta * std, color + '--', linewidth=0.5)
+    ax.fill_between(x_values,
                     avg + delta * std,
                     avg - delta * std,
-                    facecolor='red',
+                    facecolor=color,
                     alpha=0.2)
-    ax.plot(avg)
+    ax.plot(x_values, avg, label=label, color=color, marker='.')
 
 
 # #############################################################################
@@ -160,7 +215,7 @@ def plot_line_variance(ax, data, delta=1):
 # #############################################################################
 
 def random_argmax(vector):
-    '''Select argmax at random... not just first one.'''
+    '''Select argmax at random in case of tie for the max.'''
 
     index = np.random.choice(np.where(vector == vector.max())[0])
 
@@ -174,6 +229,17 @@ def random_argmax(vector):
 # #############################################################################
 
 def greedy_action(env, state, weights):
+    '''Chooses a greedy action.
+
+    Input:
+    env     : the environment to be used
+    state   : the current state
+    weights : the current weights to evaluate the state-action
+              value function for the greedy action
+
+    Output:
+    action index'''
+
     q = np.zeros(env.action_space.n)
 
     for action in range(env.action_space.n):
@@ -181,7 +247,12 @@ def greedy_action(env, state, weights):
         # q[action] = np.dot(weights, features)
         q[action] = np.sum(weights[f(state, action)])
 
-    action = random_argmax(q)
+    try:
+        action = random_argmax(q)
+    except (RuntimeError, ValueError):
+        action = env.action_space.sample()
+        'Warning: using random actions for greedy policy. Try modifying alpha.'
+
     if args.verbose:
         print('greedy action: {}'.format(action))
 
@@ -189,6 +260,15 @@ def greedy_action(env, state, weights):
 
 
 def random_action(env):
+    '''Chooses a random action from the
+    action space in the environment env.
+
+    Input:
+    env     : the environment to be used
+
+    Output:
+    action index'''
+
     action = env.action_space.sample()
     if args.verbose:
         print('Random action: {}'.format(action))
@@ -196,6 +276,15 @@ def random_action(env):
 
 
 def choose_action(env, state, weights):
+    '''Chooses a random action with probability args.epsilon
+    and a greedy action with probability 1 - args.epsilon
+
+    Input:
+    env     : the environment to be used
+    state   : the current state
+    weights : the current weights to evaluate the state-action
+              value function for the greedy action'''
+
     choices = ['random', 'greedy']
     c = np.random.choice(choices, p=[args.epsilon, 1 - args.epsilon])
     if c == 'random':
@@ -215,7 +304,7 @@ def f(s, a):
     list of indices where features are active. The list has
     length args.tilings (the number of active features) and
     each element on the list can go from
-    0 to args.tilings * args.size - 1'''
+    0 to args.size - 1'''
 
     # get position and velocity from state s
     x, xdot = s
@@ -235,6 +324,21 @@ def f(s, a):
 
 
 def sarsa(env, lmbda, alpha, seed=None):
+    '''Performs the sarsa(lambda) algorithm as defined in
+    Sutton, Richard. Reinforcement Learning, 2nd. ed.
+    page 305
+
+    Input:
+    env     : the environment to be used
+    lmbda   : the parameter lambda of Sarsa(lambda) algorithm
+    alpha   : the learning rate
+    seed    : (optional) if present, the environment will be
+              initialised with this seed, otherwise the system
+              will generate its own seed.
+
+    Output:
+    array of shape (args.episodes) containing the number of
+    steps per episode.'''
 
     assert alpha > 0
     assert 0 <= lmbda <= 1
@@ -294,7 +398,40 @@ args = get_arguments()
 iht = IHT(args.size)
 
 
+def save(objects, filename):
+    f = open(os.path.join(SAVED_MODELS_FOLDER,
+                          NOW + '_' + filename + '.pickle'), 'wb')
+    pickle.dump(objects, f)
+    f.close()
+
+
+def load(filename):
+    filename = os.path.join(SAVED_MODELS_FOLDER, filename)
+    try:
+        f = open(filename, 'rb')
+        steps, args = pickle.load(f)
+        f.close()
+    except FileNotFoundError:
+        print('Could not open file {}'.format(filename))
+        sys.exit()
+
+    return steps, args
+
+
 def runs(env, alphas, lambdas):
+    '''Performs multiple runs (as defined by parameter --runs)
+    for a list of parameters alpha and a list of parameter lambdas.
+
+    Input:
+    env     : the environment to be used
+    alphas  : list of alphas (learning rates)
+    lambdas : list of lambdas
+
+    Output:
+    array of shape (len(lambdas), len(alphas), args.runs, args.episodes)
+    containing the number of steps for each lambda, alpha, run, episode
+    '''
+
     steps = np.zeros((len(lambdas), len(alphas), args.runs, args.episodes))
     for lambda_idx, lmbda in enumerate(lambdas):
         for alpha_idx, alpha in enumerate(alphas):
@@ -310,16 +447,28 @@ def runs(env, alphas, lambdas):
 
 
 def main():
-
+    global args
     # sets the seed for random experiments
     np.random.seed(args.seed)
 
     env = gym.make(args.env)
     env._max_episode_steps = args.max_steps
-    # sarsa(env, lmbda=0.95, alpha=1.0/8, seed=args.seed)
-    alphas = (0.5 + np.arange(0, 2, step=0.5)) / args.tilings
+
+    alphas = np.array([0.1, 0.25, 0.5, 1.0]) / args.tilings
     lambdas = [1, 0.99, 0.95, 0.5, 0]
-    steps = runs(env, alphas, lambdas)
+
+    if args.load is not None:
+        # load pre-saved model
+        filename = args.load
+        steps, args = load(filename)
+        print('Using saved data from: {}'.format(filename))
+    else:
+        steps = runs(env, alphas, lambdas)
+        # steps = np.random.standard_normal((len(lambdas), len(alphas), args.runs, args.episodes))
+        save([steps, args], 'steps')
+
+    plot2('Average steps per episode', steps, alphas, lambdas)
+
 
 if __name__ == '__main__':
     main()
