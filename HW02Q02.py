@@ -101,7 +101,6 @@ def plot3(title, steps, alphas, lambdas):
     axs[0].set_ylabel('Average steps')
     axs[0].set_title('Sarsa($\\lambda$)')
     axs[0].legend()
-    # axs[0].set_prop_cycle(cycler('color', ['c', 'm', 'y', 'k']))
 
     plot_alphas(axs[1], steps, x_values=lambdas, series=alphas)
     axs[1].set_xlabel('lambda')
@@ -109,11 +108,13 @@ def plot3(title, steps, alphas, lambdas):
     axs[1].set_title('Learning rate')
     axs[1].legend()
 
-    plot_alphas2(axs[1], steps, x_values=lambdas, series=alphas)
-    axs[1].set_xlabel('lambda')
-    axs[1].set_ylabel('Average steps')
-    axs[1].set_title('Learning rate')
-    axs[1].legend()
+    plot_alphas2(axs[2], steps, alphas, lambdas)
+    axs[2].set_xlabel('episode')
+    axs[2].set_ylabel('Average steps')
+    axs[2].set_title('Learning rate')
+    axs[2].set_xlim(None, 200)
+    axs[2].set_ylim(None, 1500)
+    axs[2].legend()
 
     plt.show()
 
@@ -162,7 +163,7 @@ def plot_alphas(ax, steps, x_values, series):
                            axis=1)
 
 
-def plot_alphas2(ax, steps, x_values, series):
+def plot_alphas2(ax, steps, series, lambdas):
     '''
     Input:
     steps   : array of shape
@@ -173,15 +174,19 @@ def plot_alphas2(ax, steps, x_values, series):
     series  : array of shape len(alphas) with the series names for the
               legend'''
 
-    for alpha in range(steps.shape[1]):
-        # average number of steps across episodes
-        data = np.average(steps[:, alpha, :, :], axis=2)
-        plot_line_variance(ax,
-                           x_values,
-                           data,
-                           label='$\\alpha=$' + str(series[alpha]),
-                           color='C' + str(alpha),
-                           axis=1)
+    idx = [idx for idx, val in enumerate(lambdas) if val == 0.95]
+    x_values = np.arange(args.episodes)
+
+    for i in idx:
+        for alpha in range(steps.shape[1]):
+            # average number of steps across episodes
+            data = steps[i, alpha, :, :]
+            plot_line_variance(ax,
+                            x_values,
+                            data,
+                            label='$\\alpha=$' + str(series[alpha]),
+                            color='C' + str(alpha),
+                            axis=0)
 
 
 def plot_line_variance(ax, x_values, data, label, color, axis=0, delta=1):
@@ -467,7 +472,7 @@ def main():
         # steps = np.random.standard_normal((len(lambdas), len(alphas), args.runs, args.episodes))
         save([steps, args], 'steps')
 
-    plot2('Average steps per episode', steps, alphas, lambdas)
+    plot3('Average steps per episode', steps, alphas, lambdas)
 
 
 if __name__ == '__main__':
