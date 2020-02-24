@@ -12,8 +12,6 @@ from datetime import datetime
 ARMS = 10
 RUNS = 10
 STEPS_PER_RUN = 1000
-TRAINING_STEPS = 10
-TESTING_STEPS = 5
 
 NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = None
@@ -54,12 +52,6 @@ def get_arguments():
                         help='Number of steps in each run. One run step is '
                         'the ensemble of training steps and testing steps. '
                         'Default: ' + str(STEPS_PER_RUN))
-    parser.add_argument('--training_steps', type=int, default=TRAINING_STEPS,
-                        help='Number of training steps to be executed. '
-                        'Default: ' + str(TRAINING_STEPS))
-    parser.add_argument('--testing_steps', type=int, default=TESTING_STEPS,
-                        help='Number of testing steps to be executed. '
-                        'Default: ' + str(TESTING_STEPS))
 
     return parser.parse_args()
 
@@ -239,14 +231,33 @@ class td_lambda_agent():
 
     def msve(self, l_nums):
         assert len(l_nums) > 0
-        tot = 0
-        for num in l_nums:
-            v = np.sum(self.average_w * self.tiling.build_features(num))
-            #print("v={} for num={}".format(v, num))
-            tot += (v - num)**2
-        avg_msve = tot / len(l_nums)
-        return avg_msve
+        l_msve = []
+        for w in self.ws:
+            tot = 0
+            for num in l_nums:
+                v = np.sum(w * self.tiling.build_features(num))
+                #print("v={} for num={}".format(v, num))
+                tot += (v - num)**2
+            l_msve.append(tot / len(l_nums))
+        self.l_msve = l_msve
+        return np.mean(self.l_msve)
 
+    def variance_curves(self, l_nums):
+        return np.std(self.l_msve)
+        """
+        assert len(l_nums) > 0
+        l_variances = []
+        for w in self.ws:
+            tot = 0
+            for num in l_nums:
+                v = np.sum(w * self.tiling.build_features(num))
+                # print("v={} for num={}".format(v, num))
+                tot += (v - num) ** 2
+            l_variances.append(tot / len(l_nums))
+        #print(l_variances)
+        std = np.std(l_variances)
+        return std
+        """
 
 
 
@@ -278,27 +289,35 @@ def main():
 
     d_lammbda_to_alphas = {}
 
-    d_lammbda_to_alphas[0.0] = np.round(np.arange(15) * 0.01, 2)
-    #d_lammbda_to_alphas[0.1] = np.round(np.arange(15) * 0.01, 2)
-    #d_lammbda_to_alphas[0.2] = np.round(np.arange(16) * 0.01, 2)
-    #d_lammbda_to_alphas[0.3] = np.round(np.arange(15) * 0.01, 2)
-    d_lammbda_to_alphas[0.4] = np.round(np.arange(15) * 0.01, 2)
-    #d_lammbda_to_alphas[0.5] = np.round(np.arange(15) * 0.01, 2)
-    #d_lammbda_to_alphas[0.6] = np.round(np.arange(14) * 0.01, 2)
-    #d_lammbda_to_alphas[0.7] = np.round(np.arange(13) * 0.01, 2)
-    #d_lammbda_to_alphas[0.8] = np.round(np.arange(11) * 0.01, 2)
-    d_lammbda_to_alphas[0.9] = np.round(np.arange(8) * 0.01, 2)
+    d_lammbda_to_alphas[0.0] = np.round(np.arange(13) * 0.01, 2)
+    d_lammbda_to_alphas[0.2] = np.round(np.arange(14) * 0.01, 2)
+    d_lammbda_to_alphas[0.4] = np.round(np.arange(14) * 0.01, 2)
+    d_lammbda_to_alphas[0.6] = np.round(np.arange(12) * 0.01, 2)
+    d_lammbda_to_alphas[0.75] = np.round(np.arange(10) * 0.01, 2)
+    #d_lammbda_to_alphas[0.9] = np.round(np.arange(7) * 0.01, 2)
     d_lammbda_to_alphas[0.95] = np.round(np.arange(6) * 0.01, 2)
-    d_lammbda_to_alphas[0.98] = np.round(np.arange(6) * 0.01, 2)
-    d_lammbda_to_alphas[1.0] = np.round(np.arange(4) * 0.01, 2)
+    #d_lammbda_to_alphas[0.98] = np.round(np.arange(6) * 0.01, 2)
+    #d_lammbda_to_alphas[1.0] = np.round(np.arange(3) * 0.01, 2)
 
+
+    """
+    # d_lammbda_to_alphas[0.1] = np.round(np.arange(15) * 0.01, 2)
+    # d_lammbda_to_alphas[0.2] = np.round(np.arange(16) * 0.01, 2)
+    # d_lammbda_to_alphas[0.3] = np.round(np.arange(15) * 0.01, 2)
+    # d_lammbda_to_alphas[0.5] = np.round(np.arange(15) * 0.01, 2)
+    # d_lammbda_to_alphas[0.6] = np.round(np.arange(14) * 0.01, 2)
+    # d_lammbda_to_alphas[0.7] = np.round(np.arange(13) * 0.01, 2)
+    # d_lammbda_to_alphas[0.8] = np.round(np.arange(11) * 0.01, 2)
     #d_lammbda_to_alphas[0.3] = np.round([0.25], 2)
+    """
+
 
     d_msve = {}
+    d_std_msve = {}
 
-    #for (alpha, lammbda) in [(0.05, 0.7)]: #[(0.03* i, 0.2) for i in range(0,10)]:
     for lammbda, l_alphas in d_lammbda_to_alphas.items():
         d_msve[lammbda] = {}
+        d_std_msve[lammbda] = {}
         for alpha in l_alphas:
             print("for lammbda = {} and alpha = {}".format(lammbda, alpha))
             #alpha = 0.1
@@ -312,6 +331,9 @@ def main():
             mean_square_error = agents[(alpha, lammbda)].msve(valid_nums)
             print("msve for lammbda = {} and alpha = {}: ".format(lammbda, alpha), mean_square_error)
             d_msve[lammbda][alpha] = mean_square_error
+            std_of_mean_square_errors = agents[(alpha, lammbda)].variance_curves(valid_nums)
+            print("std  for lammbda = {} and alpha = {}: ".format(lammbda, alpha), std_of_mean_square_errors)
+            d_std_msve[lammbda][alpha] = std_of_mean_square_errors
 
 
     #print("set: ", set_LFPR)
