@@ -54,7 +54,6 @@ def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
         per episode.'''
 
     fig, axs = plt.subplots(nrows=3, ncols=2,
-                            constrained_layout=True,
                             sharey=True,
                             figsize=(11, 9))
     #plt.ylim(0.0, 1.0)
@@ -124,7 +123,6 @@ def plot_line_variance(axs, id_ax,lammbda, x_values, data, label, color, axis=0,
     ax.set_title('msve (with std) for $\\lambda$={} as a function of $\\alpha$'.format(str(lammbda)))
     #ax.set_xlim([0, 1.0])
     ax.set_ylim([-0.2, 1.0])
-    ax.legend()
     ax.plot(x_values, avg, label=label, color=color, marker='.')
     #plt.show()
 
