@@ -55,7 +55,7 @@ def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
 
     fig, axs = plt.subplots(nrows=3, ncols=2,
                             sharey=True,
-                            figsize=(11, 9))
+                            figsize=(10, 15))
     #plt.ylim(0.0, 1.0)
 
     #title = "hello"
