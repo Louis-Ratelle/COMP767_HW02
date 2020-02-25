@@ -15,6 +15,8 @@ GAMMA = 1
 EPSILON = 0.1
 TILINGS = 8
 SIZE = 4096
+ALPHAS = 2.0**np.array([-6, -4, -2, 0]) / TILINGS
+LAMBDAS = [1, 0.99, 0.95, 0.5, 0]
 RUNS = 20
 EPISODES = 1000
 MAX_STEPS = 2000
@@ -47,6 +49,16 @@ def get_arguments():
                         'epsilon-greedy policy. The algorithm will '
                         'perform an exploratory action with probability '
                         'epsilon. Default: ' + str(EPSILON))
+    parser.add_argument('--alphas', type=float, default=ALPHAS,
+                        nargs='*',
+                        help='The learning rates to be '
+                        'used. More than one value can be specified if '
+                        'separated by spaces. Default: ' + str(ALPHAS))
+    parser.add_argument('--lambdas', type=float, default=LAMBDAS,
+                        nargs='*',
+                        help='The lambda parameters for '
+                        'Sarsa(lambda). More than one value can be specified '
+                        'if separated by spaces. Default: ' + str(LAMBDAS))
     parser.add_argument('-t', '--tilings', type=int, default=TILINGS,
                         help='Number of tiles to use. Default: '
                         + str(TILINGS))
@@ -71,9 +83,9 @@ def get_arguments():
                         help='If this flag is set, each episode will be '
                         'rendered.')
     parser.add_argument('-l', '--load', type=str, default=None,
-                        help='Filename of a .pickle pre-saved data saved in '
-                        '{} folder. Please include the .pickle extension.'
-                        .format(SAVED_MODELS_FOLDER))
+                        help='Filename of a .pickle pre-saved data file saved '
+                        'in the {} folder. Please include the .pickle '
+                        'extension.'.format(SAVED_MODELS_FOLDER))
 
     return parser.parse_args()
 
@@ -86,8 +98,7 @@ def get_arguments():
 
 
 def plot3(title, steps, alphas, lambdas):
-    '''Creates the two required plots: cumulative_reward and number of timesteps
-    per episode.'''
+    '''Creates the plots: average steps per lambda, per alpha, per episodes'''
 
     fig, axs = plt.subplots(nrows=1, ncols=3,
                             constrained_layout=True,
@@ -97,9 +108,10 @@ def plot3(title, steps, alphas, lambdas):
     fig.suptitle(title, fontsize=12)
 
     plot_lambdas(axs[0], steps, x_values=alphas, series=lambdas)
-    axs[0].set_xlabel('alpha')
+    axs[0].set_xlabel('alpha (log scale)')
     axs[0].set_ylabel('Average steps')
     axs[0].set_title('Sarsa($\\lambda$)')
+    axs[0].set_xscale('log', basex=2)
     axs[0].legend()
 
     plot_alphas(axs[1], steps, x_values=lambdas, series=alphas)
@@ -111,17 +123,18 @@ def plot3(title, steps, alphas, lambdas):
     plot_alphas2(axs[2], steps, alphas, lambdas)
     axs[2].set_xlabel('episode')
     axs[2].set_ylabel('Average steps')
-    axs[2].set_title('Learning rate')
     axs[2].set_xlim(None, 200)
-    axs[2].set_ylim(None, 1500)
+    # axs[2].set_ylim(None, 1500)
     axs[2].legend()
 
     plt.show()
 
 
 def plot_lambdas(ax, steps, x_values, series):
-    '''
+    '''Plots the average number of steps per alpha for each lambda.
+
     Input:
+    ax      : the target axis object
     steps   : array of shape
               (len(lambdas), len(alphas), args.runs, args.episodes)
               containing the number of steps for each lambda, alpha, run,
@@ -142,8 +155,10 @@ def plot_lambdas(ax, steps, x_values, series):
 
 
 def plot_alphas(ax, steps, x_values, series):
-    '''
+    '''Plots the average number of steps per lambda for each alpha.
+
     Input:
+    ax      : the target axis object
     steps   : array of shape
               (len(lambdas), len(alphas), args.runs, args.episodes)
               containing the number of steps for each lambda, alpha, run,
@@ -164,29 +179,36 @@ def plot_alphas(ax, steps, x_values, series):
 
 
 def plot_alphas2(ax, steps, series, lambdas):
-    '''
+    '''Plots the learning curves (the average number of steps per
+    episode) for each alpha.
+
     Input:
+    ax      : the target axis object
     steps   : array of shape
               (len(lambdas), len(alphas), args.runs, args.episodes)
               containing the number of steps for each lambda, alpha, run,
               episode
-    x_values: array of shape len(lambdas) with labels for the x axis
     series  : array of shape len(alphas) with the series names for the
-              legend'''
+              legend
+    lambdas : arrays of lambdas
+    '''
 
-    idx = [idx for idx, val in enumerate(lambdas) if val == 0.95]
+    # use the middle element of the lambdas vector
+    idx = np.int(len(lambdas) / 2)
+
     x_values = np.arange(args.episodes)
 
-    for i in idx:
-        for alpha in range(steps.shape[1]):
-            # average number of steps across episodes
-            data = steps[i, alpha, :, :]
-            plot_line_variance(ax,
-                            x_values,
-                            data,
-                            label='$\\alpha=$' + str(series[alpha]),
-                            color='C' + str(alpha),
-                            axis=0)
+    for alpha in range(steps.shape[1]):
+        # average number of steps across episodes
+        data = steps[idx, alpha, :, :]
+        plot_line_variance(ax,
+                        x_values,
+                        data,
+                        label='$\\alpha=$' + str(series[alpha]),
+                        color='C' + str(alpha),
+                        axis=0)
+
+    ax.set_title('Sarsa({})'.format(lambdas[idx]))
 
 
 def plot_line_variance(ax, x_values, data, label, color, axis=0, delta=1):
@@ -453,23 +475,23 @@ def runs(env, alphas, lambdas):
 
 def main():
     global args
+
     # sets the seed for random experiments
     np.random.seed(args.seed)
 
     env = gym.make(args.env)
     env._max_episode_steps = args.max_steps
 
-    alphas = np.array([0.1, 0.25, 0.5, 1.0]) / args.tilings
-    lambdas = [1, 0.99, 0.95, 0.5, 0]
+    alphas = args.alphas
+    lambdas = args.lambdas
 
     if args.load is not None:
-        # load pre-saved model
+        # load pre-saved data
         filename = args.load
         steps, args = load(filename)
         print('Using saved data from: {}'.format(filename))
     else:
         steps = runs(env, alphas, lambdas)
-        # steps = np.random.standard_normal((len(lambdas), len(alphas), args.runs, args.episodes))
         save([steps, args], 'steps')
 
     plot3('Average steps per episode', steps, alphas, lambdas)
