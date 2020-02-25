@@ -8,28 +8,19 @@ import sys
 from time import time
 from datetime import datetime
 
-# constants
-ARMS = 10
-RUNS = 10
-STEPS_PER_RUN = 1000
-
 NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SEED = None
-# SEED = 197710
-
+SEED = 1
 NB_EPISODES = 25 # 25
 NB_RUNS = 50 # 50
 
 seed_count = 4
 
-#set_LFPR = set()
 
 # #############################################################################
 #
 # Parser
 #
 # #############################################################################
-
 
 def get_arguments():
     def _str_to_bool(s):
@@ -39,19 +30,15 @@ def get_arguments():
                              'boolean, got {}'.format(s))
         return {'true': True, 'false': False}[s.lower()]
 
-    parser = argparse.ArgumentParser(description='Creating a k-armed bandit.')
+    parser = argparse.ArgumentParser(description='Creating a randome walk between [0,1] with a step in [-0.2,0.2].')
     parser.add_argument('--seed', type=int, default=SEED,
                         help='Seed for the random number generator.')
-    parser.add_argument('-k', '--arms', type=int, default=ARMS,
-                        help='Number of arms on the bandit. Default: '
-                        + str(ARMS))
-    parser.add_argument('-n', '--runs', type=int, default=RUNS,
-                        help='Number of runs to be executed. Default: '
-                        + str(RUNS))
-    parser.add_argument('-s', '--steps', type=int, default=STEPS_PER_RUN,
-                        help='Number of steps in each run. One run step is '
-                        'the ensemble of training steps and testing steps. '
-                        'Default: ' + str(STEPS_PER_RUN))
+    parser.add_argument('-episodes', '--nb_episodes', type=int, default=NB_EPISODES,
+                        help='Number of episodes in each run. One run step is '
+                             'Default: ' + str(NB_EPISODES))
+    parser.add_argument('-runs', '--nb_runs', type=int, default=NB_RUNS,
+                        help='Number of runs per combination. '
+                             'Default: ' + str(NB_RUNS))
 
     return parser.parse_args()
 
@@ -61,29 +48,6 @@ def get_arguments():
 # Plotting
 #
 # #############################################################################
-
-"""
-def plot_line_variance(ax, data, gamma=1):
-    '''Plots the average data for each time step and draws a cloud
-    of the standard deviation around the average.
-
-    ax:     axis object where the plot will be drawn
-    data:   data of shape (num_trials, timesteps)
-    gamma:  (optional) scaling of the standard deviation around the average
-            if ommitted, gamma = 1.'''
-
-    avg = np.average(data, axis=0)
-    std = np.std(data, axis=0)
-
-    # ax.plot(avg + gamma * std, 'r--', linewidth=0.5)
-    # ax.plot(avg - gamma * std, 'r--', linewidth=0.5)
-    ax.fill_between(range(len(avg)),
-                    avg + gamma * std,
-                    avg - gamma * std,
-                    facecolor='red',
-                    alpha=0.2)
-    ax.plot(avg)
-"""
 
 def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
     '''Creates the two required plots: cumulative_reward and number of timesteps
@@ -155,7 +119,7 @@ def plot_line_variance(x_values, data, label, color, axis=0, delta=1):
     ax.plot(x_values, avg, label=label, color=color, marker='.')
     plt.show()
 
-
+"""
 def plot4(title, training_return, training_regret, testing_reward, testing_regret):
     '''Creates the four required plots: average training return, training regret,
     testing policy reward and testing regret.'''
@@ -178,7 +142,7 @@ def plot4(title, training_return, training_regret, testing_reward, testing_regre
 
     plot_line_variance(axs[1, 1], testing_regret)
     axs[1, 1].set_title('Total testing regret')
-
+"""
 
 def plot_lambdas_w_alphas(d_msve, title = None):
     for lammbda in d_msve.keys():
@@ -189,8 +153,6 @@ def plot_lambdas_w_alphas(d_msve, title = None):
         l_alphas_for_lammbda.sort()
         X = l_alphas_for_lammbda
         Y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
-        #print("x: ", X)
-        #print("y: ", Y)
         plt.plot(X, Y, label = lammbda)
 
     plt.ylim(0.0, 0.2)
@@ -239,43 +201,37 @@ class tiling10():
     def create_tilings(self):
         a = np.random.uniform(low=0.0, high=.1,size=10)
         a = np.sort(a)
-        #print("tiling: ", a)
         return a
-        #return np.random.uniform(low=0.0, high=.1,size=10)
 
     def build_features(self, num):
         a = np.zeros(11*10)
         for pos in range(10):
             ind = int(np.ceil((num - self.shift_10_tilings[pos])/0.1))
-            #a[ind + pos * 11] = 1
-            #set_LFPR.add(ind + pos * 11)
             a[ind*10 + pos] = 1
-            #set_LFPR.add(ind*10 + pos)
         return a
 
 
 class td_lambda_agent():
-    def __init__(self,alpha, lammbda, tiling):
+    def __init__(self,alpha, lammbda, tiling, args):
         self.alpha = alpha
         self.lammbda = lammbda
-        self.ws = np.array([np.zeros(11*10) for _ in range(NB_RUNS)]) # is there a bias here, I assume no ??
-        # In addition, add a feature corresponding to each interval that takes the value 1 when the state was within that tile, and 0 otherwise ??
+        self.args = args
+        self.ws = np.array([np.zeros(11*10) for _ in range(self.args.nb_runs)])
         self.tiling = tiling
         self.average_w = np.zeros(11*10)
         self.msves = {}
+
 
     def train_all_runs(self):
         for run_id in range(len(self.ws)):
             global seed_count
             np.random.seed(seed_count)
-            #print("seed_count: ", seed_count)
             seed_count += 1
             self.train_one_run(run_id)
         self.average_w = np.mean(self.ws, axis=0)
-        #return self.ws
 
     def train_one_run(self, run_id):
-        for episode in range(NB_EPISODES):
+        for episode in range(self.args.nb_episodes):
             self.ws[run_id] = self.train_one_episode(self.ws[run_id])
 
     def train_one_episode(self, w):
@@ -310,7 +266,6 @@ class td_lambda_agent():
             tot = 0
             for num in l_nums:
                 v = np.sum(w * self.tiling.build_features(num))
-                #print("v={} for num={}".format(v, num))
                 tot += (v - num)**2
             l_msve.append(tot / len(l_nums))
             d_msves_for_lambda[lammbda][run_id, alpha_pos] = tot / len(l_nums)
@@ -335,9 +290,6 @@ class td_lambda_agent():
         """
 
 
-
-
-
 # #############################################################################
 #
 # Main
@@ -351,16 +303,8 @@ def main():
     args = get_arguments()
 
     tilings= tiling10(5)
-    #print("tiling:", tilings.shift_10_tilings)
-    """
-    for i in range(21):
-        print(i*0.05, tilings.build_features(i*0.05))
-    print("0.32:", tilings.build_features(0.32))
-    print("0.33:", tilings.build_features(0.33))
-    """
 
     agents = {}
-
 
     d_lammbda_to_alphas = {}
 
@@ -369,12 +313,12 @@ def main():
     d_lammbda_to_alphas[0.4] = np.round(np.arange(14) * 0.01, 2)
     d_lammbda_to_alphas[0.6] = np.round(np.arange(12) * 0.01, 2)
     d_lammbda_to_alphas[0.75] = np.round(np.arange(10) * 0.01, 2)
-    #d_lammbda_to_alphas[0.9] = np.round(np.arange(7) * 0.01, 2)
     d_lammbda_to_alphas[0.95] = np.round(np.arange(5) * 0.01, 2)
+
+
+    # d_lammbda_to_alphas[0.9] = np.round(np.arange(7) * 0.01, 2)
     #d_lammbda_to_alphas[0.98] = np.round(np.arange(6) * 0.01, 2)
     #d_lammbda_to_alphas[1.0] = np.round(np.arange(3) * 0.01, 2)
-
-
     """
     # d_lammbda_to_alphas[0.1] = np.round(np.arange(15) * 0.01, 2)
     # d_lammbda_to_alphas[0.2] = np.round(np.arange(16) * 0.01, 2)
@@ -386,7 +330,6 @@ def main():
     #d_lammbda_to_alphas[0.3] = np.round([0.25], 2)
     """
 
-
     d_msve = {}
     d_std_msve = {}
     d_msves_for_lambda = {}
@@ -395,16 +338,12 @@ def main():
         d_msve[lammbda] = {}
         d_std_msve[lammbda] = {}
         nb_alphas = len(l_alphas)
-        d_msves_for_lambda[lammbda] = np.zeros((NB_RUNS, nb_alphas))
+        d_msves_for_lambda[lammbda] = np.zeros((args.nb_runs, nb_alphas))
 
         for alpha_pos, alpha in enumerate(l_alphas):
             print("for lammbda = {} and alpha = {}".format(lammbda, alpha))
-            #alpha = 0.1
-            #lammbda = 0.5
-            agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings)
+            agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings, args)
             agents[(alpha, lammbda)].train_all_runs()
-            #print("ws: ", agents[(alpha, lammbda)].ws)
-            #print("average w: :", agents[(alpha, lammbda)].average_w)
 
             valid_nums = np.round(np.arange(21) * 0.05,2)
             mean_square_error = agents[(alpha, lammbda)].msve(lammbda, valid_nums, alpha_pos, d_msves_for_lambda)
@@ -414,14 +353,7 @@ def main():
             print("std  for lammbda = {} and alpha = {}: ".format(lammbda, alpha), std_of_mean_square_errors)
             d_std_msve[lammbda][alpha] = std_of_mean_square_errors
 
-
-    #print("set: ", set_LFPR)
-    #print(len(set_LFPR))
-
-    #print(d_msve)
-
     plot_lambdas_w_alphas(d_msve)
-    #print(d_msves_for_lambda)
     plot_all_variances("lambda = {}".format(lammbda), d_lammbda_to_alphas, d_msves_for_lambda)
 
 
