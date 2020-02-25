@@ -10,8 +10,8 @@ from datetime import datetime
 
 NOW = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SEED = 1
-NB_EPISODES = 25 # 25
-NB_RUNS = 50 # 50
+NB_EPISODES = 25
+NB_RUNS = 50
 
 seed_count = 4
 
@@ -53,20 +53,22 @@ def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
     '''Creates the two required plots: cumulative_reward and number of timesteps
         per episode.'''
 
-    #fig, axs = plt.subplots(nrows=1, ncols=6,
-                            #constrained_layout=True,
-                            #sharey=True,
-                            #figsize=(10, 3))
+    fig, axs = plt.subplots(nrows=3, ncols=2,
+                            constrained_layout=True,
+                            sharey=True,
+                            figsize=(11, 9))
+    #plt.ylim(0.0, 1.0)
 
+    #title = "hello"
     #fig.suptitle(title, fontsize=12)
 
     for id_ax, (lammbda, l_alphas) in enumerate(d_lammbda_to_alphas.items()):
         label = "lambda = {}".format(lammbda)
         color = "C" + str(id_ax)
         data  = d_msves_for_lambda[lammbda]
-        plot_line_variance(l_alphas, data, label, color, axis=0, delta=1)
+        plot_line_variance(axs, id_ax,lammbda, l_alphas, data, label, color, axis=0, delta=1)
 
-    #plt.show()
+    plt.show()
 
     """
     plot_lambdas(axs[0], steps, x_values=alphas, series=lambdas)
@@ -92,7 +94,7 @@ def plot_all_variances(title, d_lammbda_to_alphas, d_msves_for_lambda):
 
 
 
-def plot_line_variance(x_values, data, label, color, axis=0, delta=1):
+def plot_line_variance(axs, id_ax,lammbda, x_values, data, label, color, axis=0, delta=1):
     '''Plots the average data for each time step and draws a cloud
     of the standard deviation around the average.
     Input:
@@ -107,17 +109,24 @@ def plot_line_variance(x_values, data, label, color, axis=0, delta=1):
 
     # ax.plot(avg + delta * std, color + '--', linewidth=0.5)
     # ax.plot(avg - delta * std, color + '--', linewidth=0.5)
-    fig, ax = plt.subplots(nrows=1, ncols=1,
-                            constrained_layout=True,
-                            sharey=True,
-                            figsize=(5,5))
+    #fig, ax = plt.subplots(nrows=1, ncols=1,
+                            #constrained_layout=True,
+                            #sharey=True,
+                            #figsize=(5,5))
+    ax = axs[id_ax//len(axs[0]), id_ax % len(axs[0])]
     ax.fill_between(x_values,
                     avg + delta * std,
                     avg - delta * std,
                     facecolor=color,
                     alpha=0.2)
+    ax.set_xlabel('$\\alpha$')
+    ax.set_ylabel('msve')
+    ax.set_title('msve (with std) for $\\lambda$={} as a function of $\\alpha$'.format(str(lammbda)))
+    #ax.set_xlim([0, 1.0])
+    ax.set_ylim([-0.2, 1.0])
+    ax.legend()
     ax.plot(x_values, avg, label=label, color=color, marker='.')
-    plt.show()
+    #plt.show()
 
 """
 def plot4(title, training_return, training_regret, testing_reward, testing_regret):
@@ -153,9 +162,12 @@ def plot_lambdas_w_alphas(d_msve, title = None):
         l_alphas_for_lammbda.sort()
         X = l_alphas_for_lammbda
         Y = [d_lammbda[alpha] for alpha in l_alphas_for_lammbda]
-        plt.plot(X, Y, label = lammbda)
+        plt.plot(X, Y, label = "$\\lambda$={}".format(lammbda))
 
     plt.ylim(0.0, 0.2)
+    plt.xlabel('$\\alpha$')
+    plt.ylabel('msve')
+    plt.title('msve curves for different $\\lambda$\'s as a functions of $\\alpha$')
     plt.legend()
     plt.show()
 
@@ -335,22 +347,23 @@ def main():
     d_msves_for_lambda = {}
 
     for lammbda, l_alphas in d_lammbda_to_alphas.items():
+        print("Calculating for lambda={}".format(lammbda))
         d_msve[lammbda] = {}
         d_std_msve[lammbda] = {}
         nb_alphas = len(l_alphas)
         d_msves_for_lambda[lammbda] = np.zeros((args.nb_runs, nb_alphas))
 
         for alpha_pos, alpha in enumerate(l_alphas):
-            print("for lammbda = {} and alpha = {}".format(lammbda, alpha))
+            #print("for lammbda = {} and alpha = {}".format(lammbda, alpha))
             agents[(alpha, lammbda)]= td_lambda_agent(alpha, lammbda, tilings, args)
             agents[(alpha, lammbda)].train_all_runs()
 
             valid_nums = np.round(np.arange(21) * 0.05,2)
             mean_square_error = agents[(alpha, lammbda)].msve(lammbda, valid_nums, alpha_pos, d_msves_for_lambda)
-            print("msve for lammbda = {} and alpha = {}: ".format(lammbda, alpha), mean_square_error)
+            #print("msve for lammbda = {} and alpha = {}: ".format(lammbda, alpha), mean_square_error)
             d_msve[lammbda][alpha] = mean_square_error
             std_of_mean_square_errors = agents[(alpha, lammbda)].variance_curves(valid_nums)
-            print("std  for lammbda = {} and alpha = {}: ".format(lammbda, alpha), std_of_mean_square_errors)
+            #print("std  for lammbda = {} and alpha = {}: ".format(lammbda, alpha), std_of_mean_square_errors)
             d_std_msve[lammbda][alpha] = std_of_mean_square_errors
 
     plot_lambdas_w_alphas(d_msve)
