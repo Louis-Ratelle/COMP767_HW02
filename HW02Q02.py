@@ -6,6 +6,7 @@ import matplotlib.ticker as ticker
 import pickle
 import os
 import sys
+import copy
 from tqdm import tqdm
 from tiling import tiles, IHT
 from datetime import datetime
@@ -124,8 +125,34 @@ def plot3(title, steps, alphas, lambdas):
     axs[2].set_xlabel('episode')
     axs[2].set_ylabel('Average steps')
     axs[2].set_xlim(None, 200)
-    # axs[2].set_ylim(None, 1500)
     axs[2].legend()
+
+    fig, axs_zoom = plt.subplots(nrows=1, ncols=3,
+                            constrained_layout=True,
+                            sharey=True,
+                            figsize=(10, 3))
+
+    plot_lambdas(axs_zoom[0], steps, x_values=alphas, series=lambdas)
+    axs_zoom[0].set_xlabel('alpha (log scale)')
+    axs_zoom[0].set_ylabel('Average steps')
+    axs_zoom[0].set_title('Sarsa($\\lambda$)')
+    axs_zoom[0].set_xscale('log', basex=2)
+    axs_zoom[0].legend()
+
+    plot_alphas(axs_zoom[1], steps, x_values=lambdas, series=alphas)
+    axs_zoom[1].set_xlabel('lambda')
+    axs_zoom[1].set_ylabel('Average steps')
+    axs_zoom[1].set_title('Learning rate')
+    axs_zoom[1].legend()
+
+    plot_alphas2(axs_zoom[2], steps, alphas, lambdas)
+    axs_zoom[2].set_xlabel('episode')
+    axs_zoom[2].set_ylabel('Average steps')
+    axs_zoom[2].set_xlim(None, 200)
+    axs_zoom[2].legend()
+
+    axs_zoom[2].set_ylim(None, 500)
+    fig.suptitle(title + ' (zoomed)', fontsize=12)
 
     plt.show()
 
