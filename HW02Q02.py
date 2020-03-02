@@ -171,8 +171,8 @@ def plot_lambdas(ax, steps, x_values, series):
               legend'''
 
     for lmbda in range(steps.shape[0]):
-        # average number of steps across episodes
-        data = np.average(steps[lmbda, :, :, :], axis=2)
+        # get number of steps from last episode
+        data = steps[lmbda, :, :, args.episodes - 1]
         plot_line_variance(ax,
                            x_values,
                            data,
@@ -195,8 +195,8 @@ def plot_alphas(ax, steps, x_values, series):
               legend'''
 
     for alpha in range(steps.shape[1]):
-        # average number of steps across episodes
-        data = np.average(steps[:, alpha, :, :], axis=2)
+        # get number of steps from last episode
+        data = steps[:, alpha, :, args.episodes - 1]
         plot_line_variance(ax,
                            x_values,
                            data,
@@ -226,7 +226,6 @@ def plot_alphas2(ax, steps, series, lambdas):
     x_values = np.arange(args.episodes)
 
     for alpha in range(steps.shape[1]):
-        # average number of steps across episodes
         data = steps[idx, alpha, :, :]
         plot_line_variance(ax,
                         x_values,
@@ -521,7 +520,7 @@ def main():
         steps = runs(env, alphas, lambdas)
         save([steps, args], 'steps')
 
-    plot3('Average steps per episode', steps, alphas, lambdas)
+    plot3('Average steps', steps, alphas, lambdas)
 
 
 if __name__ == '__main__':
